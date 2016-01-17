@@ -1,0 +1,2 @@
+# PixivFavoritesDownloader
+练习作品，一段自动下载Pixiv收藏夹图片的脚本
