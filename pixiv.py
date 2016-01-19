@@ -32,12 +32,13 @@ def rGet(sess, url):
     return r
 
 # 抓取作品ID
-def getIllustID(sess, s_list, sm_list, m_list, mm_list):
+def getIllustID(sess, s_list, sm_list, m_list, mm_list, u_list):
     #sess:已登录的requests会话
     #s:单张图片list
     #sm:单张漫画list
     #m:多张图片list
     #mm:多张漫画list
+    #u:动图List
     page_number = 1
     rest = 'show'
     while True:
@@ -54,12 +55,14 @@ def getIllustID(sess, s_list, sm_list, m_list, mm_list):
         multi_list = re.findall(r'illust_id=(\d*)" class="work  _work multiple "', r.text)
         # 抓取多张漫画类型的作品ID
         multi_manga_list = re.findall(r'illust_id=(\d*)" class="work  _work manga multiple "', r.text)
-
+        # 抓取动态图片类型的作品ID
+        ugoku_list = re.findall(r'illust_id=(\d*)" class="work  _work ugoku-illust "', r.text)
         # 合并list
         s_list.extend(single_list)
         sm_list.extend(single_manga_list)
         m_list.extend(multi_list)
         mm_list.extend(multi_manga_list)
+        u_list.extend(ugoku_list)
 
         # 判断是否存在下一页
         regx = r'<a href="\?rest=show&amp;p=%d">' % (page_number + 1)
@@ -73,23 +76,31 @@ def getIllustID(sess, s_list, sm_list, m_list, mm_list):
         page_number += 1
 
 # 取得指定作品ID的图片下载地址列表
-def getFileLinkList(sess, id, is_multi = False):
+def getFileLinkList(sess, id, type = 'single'):
     #sess: 已登录的requests会话
     #id: 作品ID
-    #is_multi: 该作品是否为多图类型
+    #type: 作品类型：single：单图，multi：多图，ugoku：动图
     #返回格式：(来源页面 url，[图片1 url,图片2 url,图片3 url……])
-    if is_multi:
-        # 如果是多图
-        ref = 'http://www.pixiv.net/member_illust.php?mode=manga&illust_id=%s' % id
-        r = rGet(sess, ref)
-        regx = r'data-filter="manga-image" data-src="(\S+?)" data-index'
-        return ref, re.findall(regx, r.text)
-    else:
+    if type == 'single':
         # 如果是单图
         ref = 'http://www.pixiv.net/member_illust.php?mode=medium&illust_id=%s' % id
         r = rGet(sess, ref)
         regx = r'data-src="(\S+?)" class="original-image"'
         return ref, re.findall(regx, r.text)
+    elif type == 'multi':
+        # 如果是多图
+        ref = 'http://www.pixiv.net/member_illust.php?mode=manga&illust_id=%s' % id
+        r = rGet(sess, ref)
+        regx = r'data-filter="manga-image" data-src="(\S+?)" data-index'
+        return ref, re.findall(regx, r.text)
+    elif type == 'ugoku':
+        # 如果是动图
+        ref = 'http://www.pixiv.net/member_illust.php?mode=medium&illust_id=%s' % id
+        r = rGet(sess, ref)
+        regx = r'pixiv.context.ugokuIllustFullscreenData  = {"src":"(\S+?)"'
+        temp_list = [url.replace('\\', '') for url in re.findall(regx, r.text)]
+        return ref, temp_list
+
 
 def download(sess, ref, url, filename):
     # 创建目录
@@ -133,6 +144,15 @@ def mDownload(sess, id, ref, urls, type = ''):
         download(sess, ref, url,
         'pixiv/' + type_dir + '/' + id + '/' + id + '_' + str(index + 1) + ext)
 
+def uDownload(sess, id, ref, urls):
+    print('正在下载动图作品：' + id)
+    type_dir = 'ugoku'
+    for index, url in enumerate(urls):
+        # 得到扩展名
+        pos = url.rfind('.')
+        ext = url[pos:]
+        download(sess, ref, url, 'pixiv/' + type_dir + '/' + id + ext)
+
 if __name__ == '__main__':
     pixiv_id = input('请输入邮箱或Pixiv ID：')
     password = input('请输入密码：')
@@ -149,17 +169,19 @@ if __name__ == '__main__':
     single_manga_illust_id_list = []
     multi_illust_id_list = []
     multi_manga_illust_id_list = []
+    ugoku_illust_id_list = []
 
     # 登录
     s.post('https://www.secure.pixiv.net/login.php', data)
 
     # 抓取
     getIllustID(s, single_illust_id_list, single_manga_illust_id_list,
-    multi_illust_id_list, multi_manga_illust_id_list)
+    multi_illust_id_list, multi_manga_illust_id_list, ugoku_illust_id_list)
 
-    print('总共找到单图画作 %d 件，单图漫画 %d 件，多图画作 %d 件，多图漫画 %d 件。' %
+    print('总共找到单图画作 %d 件，单图漫画 %d 件，多图画作 %d 件，多图漫画 %d 件，动图 %d 件。' %
     (len(single_illust_id_list), len(single_manga_illust_id_list),
-    len(multi_illust_id_list), len(multi_manga_illust_id_list)))
+    len(multi_illust_id_list), len(multi_manga_illust_id_list),
+    len(ugoku_illust_id_list)))
 
     # 获取下载地址
     #格式:
@@ -168,6 +190,7 @@ if __name__ == '__main__':
     sm_downlink = {}
     m_downlink = {}
     mm_downlink = {}
+    u_downlink =  {}
 
     for id in single_illust_id_list:
         print('正在获取图片作品 ' + id + ' 的下载地址')
@@ -179,11 +202,15 @@ if __name__ == '__main__':
 
     for id in multi_illust_id_list:
         print('正在获取多图作品 ' + id + ' 的下载地址')
-        m_downlink[id] = getFileLinkList(s, id, True)
+        m_downlink[id] = getFileLinkList(s, id, 'multi')
 
     for id in multi_manga_illust_id_list:
         print('正在获取多图漫画作品 ' + id + ' 的下载地址')
-        mm_downlink[id] = getFileLinkList(s, id, True)
+        mm_downlink[id] = getFileLinkList(s, id, 'multi')
+
+    for id in ugoku_illust_id_list:
+        print('正在获取动图作品 ' + id + ' 的下载地址')
+        u_downlink[id] = getFileLinkList(s, id, 'ugoku')
 
     # 开始下载
     for id,(ref, url) in s_downlink.items():
@@ -197,3 +224,6 @@ if __name__ == '__main__':
 
     for id,(ref, url) in mm_downlink.items():
         mDownload(s, id, ref, url, 'manga')
+
+    for id,(ref, url) in u_downlink.items():
+        uDownload(s, id, ref, url)
