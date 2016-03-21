@@ -159,6 +159,7 @@ if __name__ == '__main__':
     s = requests.session()
     data = {
     'mode': 'login',
+	'return_to':'/',
     'pixiv_id': pixiv_id,
     'pass': password,
     'skip': 0
@@ -172,7 +173,7 @@ if __name__ == '__main__':
     ugoku_illust_id_list = []
 
     # 登录
-    s.post('https://www.secure.pixiv.net/login.php', data)
+    s.post('https://www.pixiv.net/login.php', data)
 
     # 抓取
     getIllustID(s, single_illust_id_list, single_manga_illust_id_list,
