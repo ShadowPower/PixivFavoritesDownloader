@@ -65,7 +65,7 @@ def getIllustID(sess, s_list, sm_list, m_list, mm_list, u_list):
         u_list.extend(ugoku_list)
 
         # 判断是否存在下一页
-        regx = r'<a href="\?rest=show&amp;p=%d">' % (page_number + 1)
+        regx = r'<a href="\?rest=([a-z]{4})&amp;p=%d">' % (page_number + 1)
         if re.search(regx, r.text) is None:
             if rest == 'show':
                 print('抓取非公开收藏')
